@@ -2,3 +2,4 @@ credentials.py
 google_sheets_api.json
 /.venv
 /.vscode
+__pycache__
