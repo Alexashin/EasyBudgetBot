@@ -3,7 +3,7 @@ import httplib2
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from oauth2client.service_account import ServiceAccountCredentials
-from config import SHEETS_TITLE
+from config import SHEETS_TITLE, TEMPLATE_ID
 from typing import Any
 
 # ------------------------------------AUTORISATION---------------------------------------
@@ -25,86 +25,63 @@ driveService = build("drive", "v3", http=driveHttpAuth)
 # ---------------------------------------------------------------------------------------
 
 
+# Разрешение на просмотр таблицы
+def give_permission_read(newFileId: str) -> str:
+    # Создание запроса с настройками прав доступа
+    shareRes = (
+        driveService.permissions()
+        .create(
+            fileId=newFileId,
+            body={
+                "type": "anyone",
+                "role": "reader",
+            },
+            fields="id",
+        )
+        .execute()
+    )
+    return shareRes["id"]
+
+
 # Создание таблицы при регистрации пользователя
 def create_new_table(user_id: int) -> Any:
     try:
-        # ------------------------------------CREATING TABLE-------------------------------------
-        # Настройки первой таблицы TODO: НУЖНО СДЕЛАТЬ НАСТРОЙКИ ПЕРВОЙ ТАБЛИЦЫ ИЛИ ШАБЛОН
-        spreadsheet_prop = {
-            "properties": {"title": SHEETS_TITLE + str(user_id), "locale": "ru_RU"},
-            "sheets": [
-                {
-                    "properties": {
-                        "sheetType": "GRID",
-                        "sheetId": 0,
-                        "title": "Budget",
-                        "gridProperties": {"rowCount": 8, "columnCount": 5},
-                    }
-                }
-            ],
-        }
-
-        # Делаем запрос на создание файла с таблицей, запоминаем ответ
-        spreadsheet = (
-            sheetsService.spreadsheets()
-            .create(body=spreadsheet_prop, fields="spreadsheetId")
+        newFile = (
+            driveService.files()
+            .copy(fileId=TEMPLATE_ID, body={"name": SHEETS_TITLE})
             .execute()
         )
-        # ---------------------------------------------------------------------------------------
-
-        # ------------------------------------GIVING PERMISSION----------------------------------
-
-        # Создание прав доступа
-        shareRes = (
-            driveService.permissions()
-            .create(
-                fileId=spreadsheet["spreadsheetId"],
-                body={
-                    "type": "anyone",
-                    "role": "reader",
-                },  # доступ на чтение кому угодно
-                fields="id",
-            )
-            .execute()
-        )
-        # ---------------------------------------------------------------------------------------
-
+        permission_res = give_permission_read(newFile["id"])
+        # Возврат номера таблицы FIXME: убрать временный вывод
         return (
-            f'https://docs.google.com/spreadsheets/d/{spreadsheet["spreadsheetId"]}/edit'
+            f'https://docs.google.com/spreadsheets/d/{newFile["id"]}/edit'
             + "\n"
-            + shareRes["id"]
-        )  # Возврат номера таблицы FIXME: убрать временный вывод
+            + permission_res
+        )
 
     except HttpError as error:
         print(f"An error occurred: {error}")
         return error
 
 
-# # Добавление пользователя в редакторы TODO: СДЕЛАТЬ ПРОВЕРКУ ID ТАБЛИЦЫ ИЗ БАЗЫ И ПОЛУЧЕНИЕ ID ДЛЯ ИСПОЛЬЗОВАНИЯ
-# def add_writer_permission(spreadsheetId: str, user_email: str) -> str:
-#     try:
-#         shareRes = (
-#             driveService.permissions()
-#             .create(
-#                 fileId=spreadsheet["spreadsheetId"],
-#                 body={
-#                     "type": "anyone",
-#                     "role": "reader",
-#                 },  # доступ на чтение кому угодно
-#                 fields="id",
-#             )
-#             .execute()
-#         )
+# Добавление пользователя в редакторы TODO: СДЕЛАТЬ ПРОВЕРКУ ID ТАБЛИЦЫ ИЗ БАЗЫ И ПОЛУЧЕНИЕ ID ДЛЯ ИСПОЛЬЗОВАНИЯ
+def add_writer_permission(spreadsheetId: str, user_email: str) -> Any:
+    try:
+        shareRes = (
+            driveService.permissions()
+            .create(
+                fileId=spreadsheetId,
+                body={
+                    "type": "user",
+                    "role": "writer",
+                    "emailAddress": user_email,
+                },  # доступ на чтение кому угодно
+                fields="id",
+            )
+            .execute()
+        )
+        return shareRes["id"]
 
-#     except HttpError as error:
-#         print(f"An error occurred: {error}")
-#         return error
-
-
-def main() -> None:  # FIXME:
-    ans = create_new_table(1231412)
-    print(ans)
-
-
-if __name__ == "__main__":
-    main()
+    except HttpError as error:
+        print(f"An error occurred: {error}")
+        return error
