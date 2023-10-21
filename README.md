@@ -15,3 +15,4 @@
 - Библиотека aiogram
 - Локальная база данных
 - Google Sheets API
+- Google Drive API
